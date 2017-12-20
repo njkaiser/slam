@@ -10,18 +10,11 @@ from measure import measurement_model
 class EKF():
     '''Contains all data and methods for implementing an EKF'''
 
-    def __init__(self, initial_pose):
+    def __init__(self, initial_pose, initial_variance):
         '''initialize required variables for t=0'''
-        # self.M = nparticles
-
-        # create initial particle set
-        self.chi = np.empty((nparticles, 3)) # instantiate particle set - M by 3 (x, y, theta)
-        self.chi[:, 0] = initial_pose.x + np.random.normal(0, u_noise.x_abs, nparticles)
-        self.chi[:, 1] = initial_pose.y + np.random.normal(0, u_noise.y_abs, nparticles)
-        self.chi[:, 2] = initial_pose.theta + np.random.normal(0, u_noise.theta_abs, nparticles)
-
-        # initial weights set to uniform
-        self.w = np.ones(nparticles) / float(nparticles)
+        # initialize EKF with initial pose
+        self.mu = initial_pose
+        self.sigma = initial_variance
 
 
     def motion_update(self, u):
