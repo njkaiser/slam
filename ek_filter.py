@@ -12,87 +12,46 @@ class EKF():
 
     def __init__(self, initial_pose, initial_variance):
         '''initialize required variables for t=0'''
-        # initialize EKF with initial pose
         self.mu = initial_pose
         self.sigma = initial_variance
 
 
     def motion_update(self, u):
-        '''calculate updated pose for each particle'''
-        self.chi = motion_model(u, self.chi, add_noise=True)
-        self.chi[:, 2] = (self.chi[:, 2] + np.pi) % (2 * np.pi) - np.pi # angle wrapping to [-pi, pi)
-        return self.chi
+        '''calculate updated pose & covariance given a control input'''
+        # G must be updated before mu (since equation uses mu at t-1)
+        g02 = -(u.v/u.w) * np.cos(self.mu.theta) + (u.v/u.w) * np.cos(self.mu.theta + u.w*u.dt)
+        g12 = -(u.v/u.w) * np.sin(self.mu.theta) + (u.v/u.w) * np.sin(self.mu.theta + u.w*u.dt)
+        G = np.eye(3)
+        G[0, 2] = g02
+        G[1, 2] = g12
+
+        # 1) update pose estimate (noise=False since it's incorporated in sigma)
+        self.mu = motion_model(u, self.mu, add_noise=False)
+
+        # 2) update covariance
+        # TODO: make definition of R realistic and move to correct place
+        R = np.array([[0.05, 0.0, 0.0], [0.0, 0.05, 0.0], [0.0, 0.0, 0.05]])
+        self.sigma = np.matmul(np.matmul(G, self.sigma), G.T) + R # TODO WTF is R???
+
+        return self.mu, self.sigma
 
 
     def measurement_update(self, z, LM):
         '''update weights given measurement data to an observed landmark'''
 
-        try: lm = LM[z.s];
-        except: return 0; # measurement was to a robot, not a landmark
-
-        # update particle weights based on measurement data
-        self.w = measurement_model(self.chi, z, LM)
-        self.w /= sum(self.w)
-
-        # determine if we should do a particle reconditioning step
-        # w_var = np.average((self.w - np.average(self.w))**2)
-        # print w_var
-        #
-        # if w_var < 10e-10:
-        #     self.recondition()
-            # self.measurement_update(pose) # RECURSIVE, MAKE SURE THIS IS CALLED CORRECTLY
-
         return 1
-
-
-    def resample(self):
-        '''draw samples from particle set according to weights,
-        replace original set w/ chosen samples'''
-        # DON'T RESAMPLE IF NO CONTROL STEP (i.e. x_t = x_t-1)
-        # weight should only be p(z_t | x_t) * w_t-1 (equation 4.37) if no resampling took place
-
-        try:
-            idxs = np.random.choice(nparticles, nparticles, replace=True, p=self.w)
-        except ValueError:
-            print self.w
-            assert False
-        self.chi = self.chi[idxs, :]
-        return self.w # just for debug purposes
-
-
-    def extract(self):
-        mu = np.average(self.chi, weights=self.w, axis=0)
-        var = np.average((self.chi - mu)**2, weights=self.w, axis=0)
-        return mu, var
-
-
-    # def recondition(self):
-    #     # create some new, random particles (~10% of population), to help fix particle deprivation problem
-    #     # ONLY USE THIS AS A LAST RESORT IF WE LOSE WEIGHT VARIANCE
-    #
-    #     # if particle variance < certain value, then:
-    #     # 1) multiply x and y components by some scalar to spread them out (centered about the mean)
-    #     # 2) add in completely random particles
-    #     # 3) add in particles around the measurement data
-    #
-    #     # 1)
-    #     mu = np.average(self.chi[:, 0:3], weights=self.w, axis=0)
-    #     var = np.average((self.chi - mu)**2, weights=self.w, axis=0)
-    #     spread = np.subtract(self.chi, mu)
-    #     spread *= 5
-    #     self.chi = np.add(spread, mu)
-    #
-    #     # 2)
-    #     # for i in range(0, nparticles, nparticles/10): # step through the set and replace every 10th particle w/ new, random value
-    #     #     index = np.random.choice(nparticles, replace=True, p=self.w)
-    #     #     self.chi[index, 0:3] = mu * np.random.normal(1, 1.5)
-    #
-    #     # 3)
-    #     # neither 1 nor 2 helped, skipping 3 since I don't have much time and it's not robust
-    #
-    #     print "ENTERED RECONDITION STEP"
-    #     return
 
 
 if __name__ == '__main__':
     print "[WARNING] filter.py should not be run as main"
+
+    # UNIT TESTING
+    from definitions import Control, PoseStamped
+    ekf = EKF(PoseStamped(0.0, 0.0, 0.0, 0.0), np.array([[0.05, 0.0, 0.0], [0.0, 0.05, 0.0], [0.0, 0.0, 0.05]]))
+
+    print "mu:", ekf.mu
+    print "sigma:\n", ekf.sigma
+    for i in xrange(5):
+        ekf.motion_update(Control(0.1, 0.0, 1.00000000))
+        print "[ i ] mu: [", i, "]", ekf.mu
+        print "sigma:\n", ekf.sigma
