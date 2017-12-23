@@ -11,7 +11,8 @@ from measure import measurement_model, calc_expected_measurement
 from plot import PathTrace, plot_particles
 from params import N, i0
 from definitions import Control, ControlStamped, Pose, PoseStamped, Measurement, MeasurementStamped
-from particle_filter import particle_filter
+# from particle_filter import particle_filter
+from ek_filter import ek_filter
 try:
     from tqdm import tqdm
 except ImportError:
@@ -34,23 +35,25 @@ N  = min(len(U)-i0, N)   # cap max iterations at length of control data
 # initialize particle filter object
 gt_i0 = next(i for i, gt in enumerate(GT) if gt.t > U[i0].t)
  # = next(gt[0] for gt in enumerate(GT) if GT[1].t > U[i0].t) - 1
-PF = particle_filter(GT[gt_i0])
+# PF = particle_filter(GT[gt_i0])
+initial_variance = np.array([[0.005, 0.0, 0.0], [0.0, 0.005, 0.0], [0.0, 0.0, 0.01]])
+EKF = ek_filter(GT[gt_i0], initial_variance)
 
 
 # containers for storing data for plotting later
 deadrecd_path = [GT[gt_i0]] # begin fully localized
 filtered_path = [GT[gt_i0]] # begin fully localized
 groundtruth_path = [GT[gt_i0]]
-particles = PF.chi # seed with initial particle set
-weights = PF.w # seed with initial particle weights
+# particles = PF.chi # seed with initial particle set
+# weights = PF.w # seed with initial particle weights
 
 # STUFF FOR DEBUGGING
-measurements = []
-expected_measurements = []
+# measurements = []
+# expected_measurements = []
 
 j, k = gt_i0, 0 # various indices
-distance_sum = 0
-angle_sum = 0
+# distance_sum = 0
+# angle_sum = 0
 imin = next(u[0] for u in enumerate(U) if u[1].t > Z[0].t) - 1 # otherwise we could incorporate first measurement many times
 print "IMIN:", imin
 
@@ -67,12 +70,13 @@ print "setup time:", end - start
 start = time()
 deadrec_pose = GT[gt_i0]
 print "running main loop for", N, "iterations..."
-blah = N/80.
+# blah = N/80.
 for i in tqdm(xrange(i0, i0 + N)):
     ##### MOTION UPDATE #####
     deadrec_pose = motion_model(U[i], deadrec_pose)
-    PF.motion_update(U[i])
-    mu, var = PF.extract() # extract our belief from the particle set
+    # PF.motion_update(U[i])
+    # mu, var = PF.extract() # extract our belief from the particle set
+    mu, var = EKF.motion_update(U[i])
 
     # determine which groundtruth data point is closest to our control point
     while GT[j].t <= U[i].t: j += 1;
@@ -83,8 +87,8 @@ for i in tqdm(xrange(i0, i0 + N)):
     deadrecd_path.append(deadrec_pose) # store for plotting later
 
     # calculate linear/angular distance traveled (only filter if distance traveled > threshold)
-    distance_sum += sqrt((deadrecd_path[-1].x - deadrecd_path[-2].x)**2 + (deadrecd_path[-1].y - deadrecd_path[-2].y)**2) # running sum of linear disance traveled
-    angle_sum += abs(deadrecd_path[-1].x - deadrecd_path[-2].x) # running sum of angular distance traveled
+    # distance_sum += sqrt((deadrecd_path[-1].x - deadrecd_path[-2].x)**2 + (deadrecd_path[-1].y - deadrecd_path[-2].y)**2) # running sum of linear disance traveled
+    # angle_sum += abs(deadrecd_path[-1].x - deadrecd_path[-2].x) # running sum of angular distance traveled
 
     # DEBUG
     # if i%int(blah) == 0:
@@ -119,12 +123,12 @@ for i in tqdm(xrange(i0, i0 + N)):
     # print "measurements for i, k:", i, k
 
     # DEBUG:
-    try:
-        dbg = calc_expected_measurement(GT[j], LM[Z[k].s])
-        expected_measurements.append(MeasurementStamped(Z[k].t, Z[k].s, dbg[0], dbg[1]))
-        measurements.append(Z[k])
-    except KeyError:
-        pass
+    # try:
+    #     dbg = calc_expected_measurement(GT[j], LM[Z[k].s])
+    #     expected_measurements.append(MeasurementStamped(Z[k].t, Z[k].s, dbg[0], dbg[1]))
+    #     measurements.append(Z[k])
+    # except KeyError:
+    #     pass
 
     if k >= len(Z) - 1 or not measurements_to_incorporate: continue; # there's no measurement to process
 

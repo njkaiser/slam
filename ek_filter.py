@@ -7,7 +7,7 @@ from motion import motion_model
 from measure import measurement_model
 
 
-class EKF():
+class ek_filter():
     '''Contains all data and methods for implementing an EKF'''
 
     def __init__(self, initial_pose, initial_variance):
@@ -19,9 +19,13 @@ class EKF():
     def motion_update(self, u):
         '''calculate updated pose & covariance given a control input'''
         # G must be updated before mu (since equation uses mu at t-1)
-        g02 = -(u.v/u.w) * np.cos(self.mu.theta) + (u.v/u.w) * np.cos(self.mu.theta + u.w*u.dt)
-        g12 = -(u.v/u.w) * np.sin(self.mu.theta) + (u.v/u.w) * np.sin(self.mu.theta + u.w*u.dt)
         G = np.eye(3)
+        if u.w != 0:
+            g02 = -(u.v/u.w) * np.cos(self.mu.theta) + (u.v/u.w) * np.cos(self.mu.theta + u.w*u.dt)
+            g12 = -(u.v/u.w) * np.sin(self.mu.theta) + (u.v/u.w) * np.sin(self.mu.theta + u.w*u.dt)
+        else:
+            g02 = -u.v * u.dt * np.sin(self.mu.theta)
+            g12 =  u.v * u.dt * np.cos(self.mu.theta)
         G[0, 2] = g02
         G[1, 2] = g12
 
@@ -48,10 +52,10 @@ if __name__ == '__main__':
     # UNIT TESTING
     from definitions import Control, PoseStamped
     ekf = EKF(PoseStamped(0.0, 0.0, 0.0, 0.0), np.array([[0.05, 0.0, 0.0], [0.0, 0.05, 0.0], [0.0, 0.0, 0.05]]))
-
     print "mu:", ekf.mu
-    print "sigma:\n", ekf.sigma
+    print "sigma:\n", ekf.sigma, "\n"
+
     for i in xrange(5):
-        ekf.motion_update(Control(0.1, 0.0, 1.00000000))
-        print "[ i ] mu: [", i, "]", ekf.mu
+        ekf.motion_update(Control(0.1, 1.0, 1.0))
+        print("[{}] mu: {}").format(i, ekf.mu)
         print "sigma:\n", ekf.sigma
