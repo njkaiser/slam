@@ -8,11 +8,11 @@ from time import time
 from motion import motion_model
 from fileinit import parse_odometry, parse_measurement, parse_groundtruth, parse_landmarks
 from measure import measurement_model, calc_expected_measurement
-from plot import PathTrace, plot_particles
+from plot import PathTrace#, plot_particles
 from params import N, i0
 from definitions import Control, ControlStamped, Pose, PoseStamped, Measurement, MeasurementStamped
 # from particle_filter import particle_filter
-from ek_filter import ek_filter
+from ek_filter import EKF
 try:
     from tqdm import tqdm
 except ImportError:
@@ -37,7 +37,7 @@ gt_i0 = next(i for i, gt in enumerate(GT) if gt.t > U[i0].t)
  # = next(gt[0] for gt in enumerate(GT) if GT[1].t > U[i0].t) - 1
 # PF = particle_filter(GT[gt_i0])
 initial_variance = np.array([[0.005, 0.0, 0.0], [0.0, 0.005, 0.0], [0.0, 0.0, 0.01]])
-EKF = ek_filter(GT[gt_i0], initial_variance)
+EKF = EKF(GT[gt_i0], initial_variance)
 
 
 # containers for storing data for plotting later
@@ -48,14 +48,13 @@ groundtruth_path = [GT[gt_i0]]
 # weights = PF.w # seed with initial particle weights
 
 # STUFF FOR DEBUGGING
-# measurements = []
-# expected_measurements = []
+measurements = []
+expected_measurements = []
 
 j, k = gt_i0, 0 # various indices
 # distance_sum = 0
 # angle_sum = 0
 imin = next(u[0] for u in enumerate(U) if u[1].t > Z[0].t) - 1 # otherwise we could incorporate first measurement many times
-print "IMIN:", imin
 
 end = time()
 print "setup time:", end - start
@@ -83,7 +82,7 @@ for i in tqdm(xrange(i0, i0 + N)):
 
     # store corresponding data points for later comparison
     groundtruth_path.append(GT[j])
-    filtered_path.append(PoseStamped(U[i].t, *mu)) # store for plotting later
+    filtered_path.append(PoseStamped(U[i].t, mu.x, mu.y, mu.theta)) # store for plotting later
     deadrecd_path.append(deadrec_pose) # store for plotting later
 
     # calculate linear/angular distance traveled (only filter if distance traveled > threshold)
@@ -133,8 +132,8 @@ for i in tqdm(xrange(i0, i0 + N)):
     if k >= len(Z) - 1 or not measurements_to_incorporate: continue; # there's no measurement to process
 
     ##### MEASUREMENT UPDATE #####
-    # if 1:
-    if distance_sum > 0.01 or angle_sum > 0.01: # only filter if we've moved (otherwise particle variance issues)
+    if 1:
+    # if distance_sum > 0.01 or angle_sum > 0.01: # only filter if we've moved (otherwise particle variance issues)
         # try:
         #     print U[i-1].t, U[i].t
         # except:
@@ -145,11 +144,12 @@ for i in tqdm(xrange(i0, i0 + N)):
             # print "\t", z.t
             # except:
                 # pass
-            if PF.measurement_update(z, LM): # update weights based on measurement
+            EKF.measurement_update(z, LM) # update weights based on measurement
+            # if EKF.measurement_update(z, LM): # update weights based on measurement
 
-                PF.resample() # only resample if measurement is to a valid landmark
-                distance_sum = 0 # reset to 0 once we've incorporated a measurement
-                angle_sum = 0 # reset to 0 once we've incorporated a measurement
+                # PF.resample() # only resample if measurement is to a valid landmark
+                # distance_sum = 0 # reset to 0 once we've incorporated a measurement
+                # angle_sum = 0 # reset to 0 once we've incorporated a measurement
                 # k += 1 # prevents us from using the same measurement multiple times
 
 
@@ -225,10 +225,11 @@ print "elapsed time for main loop:", end - start
 #################################################################################
 
 # print out # of data points in each plotted dataset, for knowledge
-print "there are", len(measurements), "measurements data points"
-print "deadrec plot data has", len(deadrecd_path), "data points"
-print "groundtruth plot data has", len(groundtruth_path), "data points"
-print "filtered plot data has", len(filtered_path), "data points"
+print "SUMMARY:"
+print "\t", len(measurements), "measurement data points"
+print "\t", len(deadrecd_path), "deadrec data points"
+print "\t", len(groundtruth_path), "groundtruth data points"
+print "\t", len(filtered_path), "filtered data points"
 
 
 # plot groundtruth, deadreckoned, and filtered paths
@@ -327,6 +328,3 @@ plt.ylabel('theta [radians]')
 plt.legend()
 plt.show()
 plt.close()
-
-
-print "DONE"
