@@ -11,12 +11,8 @@ barcode_file_name = dataset + '/' + dataset + '_Barcodes.dat'
 
 
 ### MAIN PROGRAM OPTIONS:
-i0 = 550
-N = 500 # clip data for quicker development
-
-
-### FILTER PARAMETERS:
-nparticles = 500 # number of particles
+i0 = 0
+N = 2500 # clip data for quicker development
 
 
 ### MOTION MODEL PARAMETERS:
@@ -36,10 +32,6 @@ class z_noise(object):
     # b_rel = 0.10 # doesn't make sense to have this, measurement angle should not affect accuracy
     b_abs = 0.20 # bearing noise - unitless since using cosine comparison
 
-# particles far from a measurement will give us 0.0 for a probability
-# due to floating point limits. Once we hit zero we can never recover,
-# so add some small nonzero value to all points.
-min_prob = 1e-12 # prevents NaNs and particle deprivation if prob = 0
 
 
 if __name__ == '__main__':

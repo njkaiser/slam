@@ -9,7 +9,7 @@ from params import u_noise
 # to robot x, and a positive angular velocity will add to robot y
 
 
-def calc_delta(u):
+def calc_robot_delta(u):
     if u.w == 0:
         # case: robot is driving straight (no angular velocity)
         robot_dx = u.v * u.dt
@@ -34,7 +34,7 @@ def motion_model(u, pose, add_noise=False):
         return pose
 
     # calculate delta pose in robot coordinates
-    robot_dx, robot_dy, robot_dtheta = calc_delta(u)
+    robot_dx, robot_dy, robot_dtheta = calc_robot_delta(u)
 
 
     if isinstance(pose, PoseStamped):
@@ -81,6 +81,25 @@ def motion_model(u, pose, add_noise=False):
 
     else:
         raise Exception('control.py::motion_model() function can only handle inputs of type PoseStamped or numpy ndarray')
+
+
+def motion_delta(u, pose, add_noise=False):
+    '''return delta [x, y, theta] for a given pose and control step'''
+
+    # TODO: this may not be necessary when filter is implemented, revisit
+    # check if there's a control input, otherwise return x_t = x_t-1 (prevents drift when robot isn't moving)
+    if abs(u.v) < 0.01 and abs(u.w) < 0.01:
+        return 0, 0, 0
+
+    robot_dx, robot_dy, robot_dtheta = calc_robot_delta(u) # in robot coordinates
+
+    # in world coordinates
+    dx = robot_dx * np.cos(pose.theta) - robot_dy * np.sin(pose.theta)
+    dy = robot_dx * np.sin(pose.theta) + robot_dy * np.cos(pose.theta)
+    dtheta = robot_dtheta
+
+    return dx, dy, dtheta
+
 
 
 if __name__ == '__main__':

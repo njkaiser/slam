@@ -2,8 +2,8 @@
 
 import numpy as np
 import scipy.stats
-from params import nparticles, u_noise, z_noise
-from motion import motion_model
+from params import u_noise, z_noise
+from motion import motion_model, motion_delta
 from measure import measurement_model, calc_expected_measurement
 
 
@@ -38,7 +38,8 @@ class EKF():
 
         # 2) update covariance
         # TODO: make definition of R realistic and move to correct place
-        R = np.array([[0.05, 0.0, 0.0], [0.0, 0.05, 0.0], [0.0, 0.0, 0.05]])
+        dx, dy, dtheta = motion_delta(u, self.mu, add_noise=False)
+        R = np.array([[2 * (0.005 + 0.15 * dx), 0.0, 0.0], [0.0, 2 * (0.005 + 0.15 * dy), 0.0], [0.0, 0.0, 3 * (0.02 + 0.25 * dtheta)]])
         self.sigma = np.matmul(np.matmul(G, self.sigma), G.T) + R # TODO WTF is R???
 
         return self.mu, self.sigma
@@ -57,25 +58,27 @@ class EKF():
         H11 = (lm.x - self.mu.x) / ((lm.x - self.mu.x)**2 + (lm.y - self.mu.y)**2)
 
         H = np.array([[H00, H01, 0], [H10, H11, -1]])
-        print "H:\n", H
+        # print "H:\n", H
 
         # TODO: measurement covariance, move this to params file
-        Q = np.array([[0.1, 0], [0, 0.2]])
+        # Q = np.array([[0.25, 0], [0, 0.2]])
+        # Q = np.array([[0.05 + 0.1 * z.r, 0], [0, 0.2 * z.b]])
+        Q = np.array([[4., 0.], [0., 4.]])
 
-        thisequationistoolong = np.linalg.inv(np.dot(np.dot(H, self.sigma), H.T) + Q)
-        K = np.dot(np.dot(self.sigma, H.T), thisequationistoolong)
-        print "K:\n", K
+        S = np.linalg.inv(np.dot(np.dot(H, self.sigma), H.T) + Q)
+        K = np.dot(np.dot(self.sigma, H.T), S)
+        # print "K:\n", K
 
         zt = np.array([z.r, z.b])
         tmp = calc_expected_measurement(self.mu, lm)
         h_bar = np.array([tmp[0], tmp[1]])
         tmp = self.mu_() + np.dot(K, (zt - h_bar))
-        print "mu before:", tmp[0], ", ", tmp[1], ", ", tmp[2]
+        # print "mu before:", tmp[0], ", ", tmp[1], ", ", tmp[2]
         self.mu.x, self.mu.y, self.mu.theta = tmp[0], tmp[1], tmp[2]
-        print "mu:", self.mu
+        # print "mu:", self.mu
 
         self.sigma = np.dot(np.eye(3) - np.dot(K, H), self.sigma)
-        print "sigma:\n", self.sigma
+        # print "sigma:\n", self.sigma
 
         return 1
 

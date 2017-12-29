@@ -12,7 +12,7 @@ from plot import PathTrace#, plot_particles
 from params import N, i0
 from definitions import Control, ControlStamped, Pose, PoseStamped, Measurement, MeasurementStamped
 # from particle_filter import particle_filter
-from ek_filter import EKF
+from filter import EKF
 try:
     from tqdm import tqdm
 except ImportError:
@@ -34,7 +34,8 @@ N  = min(len(U)-i0, N)   # cap max iterations at length of control data
 
 # initialize particle filter object
 gt_i0 = next(i for i, gt in enumerate(GT) if gt.t > U[i0].t)
- # = next(gt[0] for gt in enumerate(GT) if GT[1].t > U[i0].t) - 1
+# print "gt_i0:", gt_i0
+# = next(gt[0] for gt in enumerate(GT) if GT[1].t > U[i0].t) - 1
 # PF = particle_filter(GT[gt_i0])
 initial_variance = np.array([[0.005, 0.0, 0.0], [0.0, 0.005, 0.0], [0.0, 0.0, 0.01]])
 EKF = EKF(GT[gt_i0], initial_variance)
@@ -225,7 +226,7 @@ print "elapsed time for main loop:", end - start
 #################################################################################
 
 # print out # of data points in each plotted dataset, for knowledge
-print "SUMMARY:"
+print "\nSUMMARY:"
 print "\t", len(measurements), "measurement data points"
 print "\t", len(deadrecd_path), "deadrec data points"
 print "\t", len(groundtruth_path), "groundtruth data points"
@@ -240,6 +241,9 @@ PathTrace(filtered_path, plotname, True, 'b', 'Filtered Data')
 PathTrace(groundtruth_path, plotname, True, 'g', 'Ground Truth Data')
 # plot_particles(fig, ax, particles, weights)
 plt.show()
+
+
+assert False
 
 
 # plot measurement range data vs time
@@ -283,9 +287,6 @@ plt.ylabel('error [m]')
 plt.legend()
 plt.show()
 plt.close()
-
-
-assert False
 
 
 # plot x position vs time
