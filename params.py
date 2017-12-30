@@ -12,7 +12,7 @@ barcode_file_name = dataset + '/' + dataset + '_Barcodes.dat'
 
 ### MAIN PROGRAM OPTIONS:
 i0 = 0
-N = 2500 # clip data for quicker development
+N = 1000 # clip data for quicker development
 
 
 ### MOTION MODEL PARAMETERS:

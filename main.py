@@ -18,7 +18,7 @@ try:
 except ImportError:
     print "consider installing tqdm, fool (sudo pip install tqdm)"
     tqdm = lambda iterator, **kwargs: iterator
-
+from copy import copy, deepcopy # debugging
 
 ##############################################################################
 ###### START SETUP ###########################################################
@@ -34,7 +34,8 @@ N  = min(len(U)-i0, N)   # cap max iterations at length of control data
 
 # initialize particle filter object
 gt_i0 = next(i for i, gt in enumerate(GT) if gt.t > U[i0].t)
-# print "gt_i0:", gt_i0
+print "gt_i0:", gt_i0
+print "initial gt:", GT[gt_i0]
 # = next(gt[0] for gt in enumerate(GT) if GT[1].t > U[i0].t) - 1
 # PF = particle_filter(GT[gt_i0])
 initial_variance = np.array([[0.005, 0.0, 0.0], [0.0, 0.005, 0.0], [0.0, 0.0, 0.01]])
@@ -42,9 +43,9 @@ EKF = EKF(GT[gt_i0], initial_variance)
 
 
 # containers for storing data for plotting later
-deadrecd_path = [GT[gt_i0]] # begin fully localized
-filtered_path = [GT[gt_i0]] # begin fully localized
-groundtruth_path = [GT[gt_i0]]
+deadrecd_path = [] #[GT[gt_i0]] # begin fully localized
+filtered_path = [] # [GT[gt_i0]] # begin fully localized
+groundtruth_path = [] # [GT[gt_i0]]
 # particles = PF.chi # seed with initial particle set
 # weights = PF.w # seed with initial particle weights
 
@@ -53,8 +54,8 @@ measurements = []
 expected_measurements = []
 
 j, k = gt_i0, 0 # various indices
-# distance_sum = 0
-# angle_sum = 0
+distance_sum = 0
+angle_sum = 0
 imin = next(u[0] for u in enumerate(U) if u[1].t > Z[0].t) - 1 # otherwise we could incorporate first measurement many times
 
 end = time()
@@ -82,13 +83,19 @@ for i in tqdm(xrange(i0, i0 + N)):
     while GT[j].t <= U[i].t: j += 1;
 
     # store corresponding data points for later comparison
-    groundtruth_path.append(GT[j])
+    # print "groundtruth_path", i, "="
+    # for g in groundtruth_path:
+    #     print g
+    groundtruth_path.append(copy(GT[j]))
     filtered_path.append(PoseStamped(U[i].t, mu.x, mu.y, mu.theta)) # store for plotting later
     deadrecd_path.append(deadrec_pose) # store for plotting later
 
     # calculate linear/angular distance traveled (only filter if distance traveled > threshold)
-    # distance_sum += sqrt((deadrecd_path[-1].x - deadrecd_path[-2].x)**2 + (deadrecd_path[-1].y - deadrecd_path[-2].y)**2) # running sum of linear disance traveled
-    # angle_sum += abs(deadrecd_path[-1].x - deadrecd_path[-2].x) # running sum of angular distance traveled
+    try:
+        distance_sum += sqrt((deadrecd_path[-1].x - deadrecd_path[-2].x)**2 + (deadrecd_path[-1].y - deadrecd_path[-2].y)**2) # running sum of linear disance traveled
+        angle_sum += abs(deadrecd_path[-1].x - deadrecd_path[-2].x) # running sum of angular distance traveled
+    except IndexError:
+        pass # ignore when we don't have data
 
     # DEBUG
     # if i%int(blah) == 0:
@@ -133,8 +140,8 @@ for i in tqdm(xrange(i0, i0 + N)):
     if k >= len(Z) - 1 or not measurements_to_incorporate: continue; # there's no measurement to process
 
     ##### MEASUREMENT UPDATE #####
-    if 1:
-    # if distance_sum > 0.01 or angle_sum > 0.01: # only filter if we've moved (otherwise particle variance issues)
+    # if 1:
+    if distance_sum > 0.005 or angle_sum > 0.01: # only filter if we've moved
         # try:
         #     print U[i-1].t, U[i].t
         # except:
@@ -243,7 +250,7 @@ PathTrace(groundtruth_path, plotname, True, 'g', 'Ground Truth Data')
 plt.show()
 
 
-assert False
+# assert False
 
 
 # plot measurement range data vs time
@@ -270,13 +277,46 @@ assert False
 
 
 # plot errors vs time
+def path_error(path, gt):
+
+    max_dist = 0.25
+    min_dists = []
+
+    for i, p in enumerate(path):
+        dist = 0
+        j = i
+        while dist < max_dist and j > 0:
+            j -= 1
+            dist += np.sqrt((gt[j+1].x - gt[j].x)**2 + (gt[j+1].y - gt[j].y)**2)
+        dist = 0
+        k = i
+        while dist < max_dist and k < len(gt)-1:
+            k += 1
+            dist += np.sqrt((gt[k].x - gt[k-1].x)**2 + (gt[k].y - gt[k-1].y)**2)
+
+        m = 999
+        for idx in xrange(j, k+1):
+            m = min(m, np.sqrt((gt[idx].x - p.x)**2 + (gt[idx].y - p.y)**2))
+        min_dists.append(m)
+
+    return min_dists
+
+for i in xrange(5):
+    print groundtruth_path[i].x, ", ", groundtruth_path[i].y
+
+e = path_error(filtered_path, groundtruth_path)
+
+
 plt.figure('Errors vs Time')
 plt.subplot(111)
-x_error = map(lambda a: a[0]-a[1], zip([p.x for p in groundtruth_path], [p.x for p in filtered_path]))
-y_error = map(lambda a: a[0]-a[1], zip([p.y for p in groundtruth_path], [p.y for p in filtered_path]))
-theta_error = map(lambda a: a[0]-a[1], zip([p.theta for p in groundtruth_path], [p.theta for p in filtered_path]))
+x_error = map(lambda a: abs(a[0]-a[1]), zip([p.x for p in groundtruth_path], [p.x for p in filtered_path]))
+y_error = map(lambda a: abs(a[0]-a[1]), zip([p.y for p in groundtruth_path], [p.y for p in filtered_path]))
+theta_error = map(lambda a: abs(a[0]-a[1]), zip([p.theta for p in groundtruth_path], [p.theta for p in filtered_path]))
+xy_error = map(lambda a: np.sqrt(a[0]**2 + a[1]**2), zip(x_error, y_error))
 plt.plot([p.t for p in groundtruth_path], x_error, color='purple', label="Filter Error X")
 plt.plot([p.t for p in groundtruth_path], y_error, color='magenta', label="Filter Error Y")
+plt.plot([p.t for p in groundtruth_path], xy_error, color='green', label="Filter Total XY Error")
+plt.plot([p.t for p in groundtruth_path], e, color='black', linestyle='--', label="Adjusted Error")
 # plt.plot([p.t for p in groundtruth_path], theta_error, color='y', label="Filter Error Theta")
 # plt.plot([p.t for p in deadrecd_path], [p.x for p in deadrecd_path], color='r', label="Deadrec X")
 # plt.plot([p.t for p in filtered_path], [p.x for p in filtered_path], color='b', label="Filtered X")
