@@ -2,6 +2,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.patches import Ellipse
 
 
 def PathTrace(data, plotname, hold, color, label):
@@ -14,48 +15,60 @@ def PathTrace(data, plotname, hold, color, label):
         plt.show()
 
 
-# def plot_particles(fig, ax, particles, weights=0):
-#     '''plot particles (represented by arrows)'''
-#     fig, ax = fig, ax # TODO do I need this?
-#
-#     theta = np.array([row[2] for row in particles])
-#     X = np.array([row[0] for row in particles])
-#     Y = np.array([row[1] for row in particles])
-#     U = np.cos(theta)
-#     V = np.sin(theta)
-#     # print "sizes:", X.shape, Y.shape, U.shape, V.shape
-#
-#     # quiver plot scaling is stupid in matplotlib, need to normalize:
-#     U = U / np.sqrt(U**2 + V**2);
-#     V = V / np.sqrt(U**2 + V**2);
-#
-#     # if isinstance(weights, np.ndarray):
-#     #     C = 255 * weights # we'll use a Yellow-Green-Blue colormap to represent particle weights
-#     # else:
-#     #     C = np.linspace(0, 255, len(X)) # taste the rainbow
-#     C = np.zeros_like(X) # taste the rainbow
-#
-#     # S = ax.scatter(X, Y, c=C, marker='.')
-#     Q = ax.quiver(X, Y, U, V, C, angles='xy', scale_units='xy', scale=20, width=0.001, headwidth=4, label='Particles')
-#     # Q = ax.quiver(X, Y, U, V, C, cmap='YlGnBu', angles='xy', scale_units='xy', scale=20, width=0.001, headwidth=4, label='Particles')
-#
-#     # plt.axis('equal')
-#     # plt.axis([-0.1, 1.6, -1.6, 0.1])
-#     # ax.set_xlim(-0.1, 1.6)
-#     # ax.set_ylim(-0.3, 0.1)
-#     plt.xlim(0.9, 4)
-#     # plt.xticks(np.arange(1.0, 4.0 + 1))
-#     plt.ylim(-4.8, 1.2)
-#     # plt.yticks(np.arange(-5.0, 0.0 + 1))
-#     plt.gca().set_aspect('equal', adjustable='box')
-#
-#     plt.draw()
-#     mng = plt.get_current_fig_manager()
-#     mng.full_screen_toggle()
-#     # plt.show()
-#
-#     return fig, ax
+def plot_covariances(fig, ax, poses, covariances):
+    '''plot covariances as ellipses'''
+    fig, ax = fig, ax # TODO do I need this?
+
+
+    ells = []
+    # TODO: figure out how angle is determined instead of just setting to zero
+    for i in xrange(len(poses)):
+        ells.append(Ellipse(xy=(poses[i].x, poses[i].y), width=covariances[i][0,0], height=covariances[i][1,1], angle=0))
+
+    for e in ells:
+        ax.add_artist(e)
+        e.set_clip_box(ax.bbox)
+        e.set_alpha(0.5)
+        e.set_facecolor(np.random.rand(3))
+
+
+    # plt.xlim(0.9, 4)
+    # # plt.xticks(np.arange(1.0, 4.0 + 1))
+    # plt.ylim(-4.8, 1.2)
+    # plt.yticks(np.arange(-5.0, 0.0 + 1))
+    plt.gca().set_aspect('equal', adjustable='box')
+
+    plt.draw()
+    mng = plt.get_current_fig_manager()
+    mng.full_screen_toggle()
+    # plt.show()
+
+    return fig, ax
 
 
 if __name__ == '__main__':
     print "[WARNING] plot.py should not be run as main"
+
+    # UNIT TESTING:
+    from definitions import PoseStamped, ControlStamped
+    from motion import motion_model
+    from filter import EKF
+
+    covariances = []
+    poses = []
+
+    ekf = EKF(PoseStamped(0, 0, 0, 0), np.array([[0.005, 0.0, 0.0], [0.0, 0.005, 0.0], [0.0, 0.0, 0.01]]))
+    u = ControlStamped(1, 0, 0.1, 0.1)
+    for i in xrange(5):
+        print ekf.sigma
+        covariances.append(ekf.sigma)
+        poses.append(ekf.mu)
+        ekf.motion_update(u)
+
+    # print covariances
+    # print poses
+
+    fig, ax = plt.subplots()
+    PathTrace(poses, 'blah', 1, 'b', 'stuff')
+    plot_covariances(fig, ax, poses, covariances)
+    plt.show()
